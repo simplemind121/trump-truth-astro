@@ -1,7 +1,0 @@
-name = "trump-truth-astro"
-account_id = ""
-workers_dev = true
-route = ""
-zone_id = ""
-build = { command = "npm run build", cwd = "." }
-env = { production = { name = "trump-truth-astro" } }
