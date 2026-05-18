@@ -1,0 +1,309 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+interface Post {
+  id: string;
+  created_at: string;
+  created_at_text: string;
+  content: string;
+  content_zh_cn: string;
+  avatar: string;
+  url: string;
+  media: Array<{
+    type: string;
+    url: string;
+    preview_url: string;
+    remote_url: string;
+  }>;
+}
+
+// 示例数据 - 实际使用时应从 API 获取
+const samplePosts: Post[] = [
+  {
+    id: '1',
+    created_at: new Date().toISOString(),
+    created_at_text: '刚刚',
+    content: 'Sample post content in English',
+    content_zh_cn: '示例帖子内容（中文）',
+    avatar: 'https://hketf-lab.pages.dev/assets/home/trump-home.jpg',
+    url: 'https://truthsocial.com/@realDonaldTrump/example',
+    media: []
+  }
+];
+---
+
+<Layout title="特朗普真相档案库">
+  <div class="wrap">
+    <section class="hero">
+      <div class="topnav">
+        <a href="/" class="navchip">⌂ 首页</a>
+        <a href="/korea-tech" class="navchip">◉ 韩股科技</a>
+        <a href="/morning-report" class="navchip">✦ 今晨晨报</a>
+      </div>
+      
+      <div class="hero-row">
+        <div>
+          <div class="eyebrow">每分钟更新，实时追踪 Trump 发言动态</div>
+          <h1>一顿分析猛如虎，涨跌全看特朗普</h1>
+          <div class="sub">按时间顺序浏览特朗普最新发言，快速感受一句话如何撬动市场情绪与图片内容。当前默认保留最新 20 条内容，支持中文 / 原文切换，并按分钟级自动更新。</div>
+          
+          <div class="hero-meta">
+            <div class="toggle-group">
+              <button class="toggle-btn" data-lang="en">原文</button>
+              <button class="toggle-btn active" data-lang="zh">中文</button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-label">最近发言数</div>
+            <div class="stat-value" id="count-stat">--</div>
+            <div class="stat-sub">默认展示最新 20 条内容</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">最近一条时间</div>
+            <div class="stat-value" id="latest-stat">--</div>
+            <div class="stat-sub">快速判断当前更新节奏</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="error" id="error-box"></div>
+
+    <section class="timeline" id="posts">
+      {samplePosts.map((post) => (
+        <article class="item">
+          <div class="dot"></div>
+          <div class="card">
+            <div class="card-top">
+              <div class="profile">
+                <div class="avatar">
+                  <img class="avatar-img" alt="avatar" src={post.avatar} />
+                </div>
+                <div>
+                  <div class="name">Donald J. Trump</div>
+                  <div class="handle">@realDonaldTrump</div>
+                </div>
+              </div>
+              <div class="time">{post.created_at_text}</div>
+            </div>
+            <div class="body">{post.content_zh_cn}</div>
+            <div class="meta">
+              <span class="tag">内容类型 · 最新发言</span>
+              <span class="tag">阅读模式 · 中文 / 原文切换</span>
+            </div>
+            <div class="media"></div>
+            <div class="link-row">
+              <a class="origin-link" target="_blank" rel="noopener noreferrer" href={post.url}>查看原文</a>
+            </div>
+          </div>
+        </article>
+      ))}
+    </section>
+  </div>
+
+  <script define:vars={{ FEED: '/api/pulse/trump-truth-archive', REFRESH_MS: 120000 }}>
+    const FEED = '/api/pulse/trump-truth-archive';
+    const REFRESH_MS = 120000;
+    let currentLang = 'zh';
+    let latestPosts = [];
+
+    const postsEl = document.getElementById('posts');
+    const countStat = document.getElementById('count-stat');
+    const latestStat = document.getElementById('latest-stat');
+    const errorBox = document.getElementById('error-box');
+
+    function timeAgo(ts) {
+      if (!ts) return '--';
+      const diff = Math.max(0, Date.now() - new Date(ts).getTime());
+      const min = Math.round(diff / 60000);
+      if (min < 1) return '刚刚';
+      if (min < 60) return `${min} 分钟前`;
+      const hr = Math.round(min / 60);
+      if (hr < 24) return `${hr} 小时前`;
+      const day = Math.round(hr / 24);
+      return `${day} 天前`;
+    }
+
+    function isPlaceholderText(text) {
+      const raw = String(text || '').trim();
+      if (!raw) return true;
+      return [
+        '这是一则转发／引用链接，请点击下方"查看原文"阅读原帖内容。',
+        '這是一則轉發／引用連結，請點擊下方「查看原文」閱讀原帖內容。',
+        '이 게시물은 원문 링크를 공유한 리포스트/인용 글입니다. 아래의 원문 보기 링크를 눌러 확인해 주세요.',
+        '抱歉，我无法直接打开或读取该链接内容',
+        '抱歉，我無法直接開啟或讀取該連結內容'
+      ].some(x => raw.includes(x));
+    }
+
+    function preferredText(post) {
+      const zh = post.content_zh_cn || '';
+      const en = post.content || '';
+      if (currentLang === 'zh') return isPlaceholderText(zh) ? '' : zh || en || '';
+      return en || zh || '';
+    }
+
+    function normalizeMediaUrl(url) {
+      if (!url) return '';
+      if (/^https?:\/\//i.test(url)) return url;
+      if (url.startsWith('/')) return url;
+      return url;
+    }
+
+    function bindLangToggle() {
+      document.querySelectorAll('.toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          currentLang = btn.dataset.lang;
+          document.querySelectorAll('.toggle-btn').forEach(el =>
+            el.classList.toggle('active', el === btn)
+          );
+          render(latestPosts);
+        });
+      });
+    }
+
+    function hasVideoMedia(post) {
+      return Array.isArray(post?.media) && post.media.some(item => {
+        const type = String((item && item.type) || '').toLowerCase();
+        const rawUrl = (typeof item === 'string') ? item : ((item && (item.url || item.preview_url || item.remote_url)) || '');
+        return type.includes('video') || /\.(mp4|mov|webm)(\?|$)/i.test(String(rawUrl || ''));
+      });
+    }
+
+    function render(posts) {
+      latestPosts = (posts || []).filter(post => !hasVideoMedia(post));
+      postsEl.innerHTML = '';
+      countStat.textContent = String(latestPosts.length);
+      latestStat.textContent = latestPosts[0]?.created_at ? timeAgo(latestPosts[0].created_at) : (latestPosts[0]?.created_at_text || '--');
+
+      latestPosts.forEach(post => {
+        try {
+          const article = document.createElement('article');
+          article.className = 'item';
+          
+          const dot = document.createElement('div');
+          dot.className = 'dot';
+          
+          const card = document.createElement('div');
+          card.className = 'card';
+          
+          const cardTop = document.createElement('div');
+          cardTop.className = 'card-top';
+          
+          const profile = document.createElement('div');
+          profile.className = 'profile';
+          
+          const avatar = document.createElement('div');
+          avatar.className = 'avatar';
+          const avatarImg = document.createElement('img');
+          avatarImg.className = 'avatar-img';
+          avatarImg.alt = 'avatar';
+          if (post.avatar) {
+            avatarImg.src = normalizeMediaUrl(post.avatar);
+            avatarImg.style.display = 'block';
+          } else {
+            avatarImg.style.display = 'none';
+          }
+          avatar.appendChild(avatarImg);
+          
+          const profileInfo = document.createElement('div');
+          const name = document.createElement('div');
+          name.className = 'name';
+          name.textContent = 'Donald J. Trump';
+          const handle = document.createElement('div');
+          handle.className = 'handle';
+          handle.textContent = '@realDonaldTrump';
+          profileInfo.appendChild(name);
+          profileInfo.appendChild(handle);
+          
+          profile.appendChild(avatar);
+          profile.appendChild(profileInfo);
+          
+          const time = document.createElement('div');
+          time.className = 'time';
+          time.textContent = post.created_at_text || timeAgo(post.created_at);
+          
+          cardTop.appendChild(profile);
+          cardTop.appendChild(time);
+          
+          const body = document.createElement('div');
+          body.className = 'body';
+          body.textContent = preferredText(post);
+          body.classList.toggle('is-original', currentLang === 'en');
+          
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          [['内容类型', '最新发言'], ['阅读模式', '中文 / 原文切换']].forEach(([a, b]) => {
+            const tag = document.createElement('span');
+            tag.className = 'tag';
+            tag.textContent = `${a} · ${b}`;
+            meta.appendChild(tag);
+          });
+          
+          const mediaWrap = document.createElement('div');
+          mediaWrap.className = 'media';
+          (post.media || []).forEach(item => {
+            const type = ((item && item.type) || '').toLowerCase();
+            const rawUrl = (typeof item === 'string') ? item : ((item && (item.url || item.preview_url || item.remote_url)) || '');
+            const url = normalizeMediaUrl(rawUrl);
+            if (!url) return;
+            if (type.includes('video') || /\.(mp4|mov|webm)(\?|$)/i.test(url)) return;
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = 'post media';
+            img.loading = 'lazy';
+            mediaWrap.appendChild(img);
+          });
+          
+          const linkRow = document.createElement('div');
+          linkRow.className = 'link-row';
+          const originLink = document.createElement('a');
+          originLink.className = 'origin-link';
+          originLink.href = post.url || post.status_url || 'https://www.trumpstruth.org/';
+          originLink.target = '_blank';
+          originLink.rel = 'noopener noreferrer';
+          originLink.textContent = '查看原文';
+          linkRow.appendChild(originLink);
+          
+          card.appendChild(cardTop);
+          card.appendChild(body);
+          card.appendChild(meta);
+          card.appendChild(mediaWrap);
+          card.appendChild(linkRow);
+          
+          article.appendChild(dot);
+          article.appendChild(card);
+          postsEl.appendChild(article);
+        } catch (err) {
+          console.error('render post failed', err, post);
+        }
+      });
+    }
+
+    async function refresh() {
+      if (document.hidden) return;
+      try {
+        const resp = await fetch(FEED, { cache: 'no-store' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || 'unknown error');
+        errorBox.classList.remove('show');
+        render(data.posts || []);
+      } catch (err) {
+        errorBox.textContent = '当前内容更新稍慢，请稍后刷新重试';
+        errorBox.classList.add('show');
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refresh();
+    });
+
+    bindLangToggle();
+    refresh();
+    setInterval(refresh, REFRESH_MS);
+  </script>
+</Layout>

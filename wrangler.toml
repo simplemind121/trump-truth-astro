@@ -1,0 +1,8 @@
+name = "trump-truth-astro"
+type = "javascript"
+account_id = ""
+workers_dev = true
+route = ""
+zone_id = ""
+build = { command = "npm run build", cwd = "." }
+env = { production = { name = "trump-truth-astro" } }
