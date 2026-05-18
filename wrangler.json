@@ -1,6 +1,5 @@
 {
   "name": "trump-truth-astro",
-  "type": "javascript",
   "build": {
     "command": "pnpm install && pnpm run build",
     "cwd": "."
