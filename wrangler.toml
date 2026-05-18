@@ -1,5 +1,4 @@
 name = "trump-truth-astro"
-type = "javascript"
 account_id = ""
 workers_dev = true
 route = ""
